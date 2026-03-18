@@ -2,7 +2,7 @@
 
 Final project repository for ransomware attack detection using processor and disk I/O behavior.
 
-This projecat now includes:
+This project now includes:
 
 - A complete Tkinter desktop app for model training/testing
 - A notebook with paper-focused enhancements (XAI, robustness, CV, realtime simulation)
@@ -57,10 +57,10 @@ This projecat now includes:
 
 ## Environment Setup
 
-Recommended: Python 3.8 in conda (dependencies are legacy and pinned).
+Recommended: Python 3.7 in conda (dependencies are legacy and pinned).
 
 ```bash
-conda create -n ransomware-detect python=3.8 -y
+conda create -n ransomware-detect python=3.7 -y
 conda activate ransomware-detect
 uv pip install -r Requirements.txt
 ```
@@ -68,7 +68,7 @@ uv pip install -r Requirements.txt
 Fallback (if `uv` is not available):
 
 ```bash
-conda create -n ransomware-detect python=3.8 -y
+conda create -n ransomware-detect python=3.7 -y
 conda activate ransomware-detect
 pip install -r Requirements.txt
 ```
@@ -117,6 +117,11 @@ python -m nbconvert --to notebook --execute Ransomware_Paper_Enhancements.ipynb 
 5. `Predict Attack from Test Data`
 6. `Generate PDF Report`
 
+Prediction behavior:
+
+- The app asks you to select the test CSV at runtime (not hardcoded).
+- If the selected test CSV contains a `label` column, the app also computes validation metrics and a validation confusion matrix.
+
 ## Notebook Enhancements (Implemented)
 
 | Enhancement | Output |
@@ -136,8 +141,8 @@ The `figures/` directory currently includes:
 
 | File Type | Files |
 |---|---|
-| PNG | `baseline_confusion_matrix.png`, `shap_summary_plot.png`, `shap_feature_importance.png`, `adversarial_robustness.png`, `kfold_cv_accuracy.png`, `realtime_simulation.png`, `model_comparison.png` |
-| CSV | `shap_feature_importance_table.csv`, `adversarial_robustness_table.csv`, `kfold_cv_scores.csv`, `kfold_cv_summary.csv`, `realtime_summary.csv`, `model_comparison_table.csv` |
+| PNG | `dataset_class_distribution.png`, `svm_confusion_matrix.png`, `knn_confusion_matrix.png`, `decision_tree_confusion_matrix.png`, `random_forest_confusion_matrix.png`, `xgboost_confusion_matrix.png`, `dnn_confusion_matrix.png`, `lstm_confusion_matrix.png`, `extension_cnn2d_confusion_matrix.png`, `all_algorithms_performance_graph.png`, `test_prediction_distribution.png`, `baseline_confusion_matrix.png`, `shap_summary_plot.png`, `shap_feature_importance.png`, `adversarial_robustness.png`, `kfold_cv_accuracy.png`, `realtime_simulation.png`, `model_comparison.png`, `test_predictions_validation_confusion_matrix.png` |
+| CSV | `algorithm_metrics_long.csv`, `test_predictions.csv`, `test_predictions_summary.csv`, `test_predictions_validation_metrics.csv`, `shap_feature_importance_table.csv`, `adversarial_robustness_table.csv`, `kfold_cv_scores.csv`, `kfold_cv_summary.csv`, `realtime_summary.csv`, `model_comparison_table.csv` |
 | PDF | `all_outputs_report.pdf` |
 
 ## Key Outcome Snapshot
@@ -150,10 +155,11 @@ The `figures/` directory currently includes:
 
 | Issue | Suggested Fix |
 |---|---|
-| Dependency install fails | Use Python 3.8 conda environment and reinstall requirements |
+| Dependency install fails | Use Python 3.7 conda environment and reinstall requirements |
 | `xgboost` install issues on Windows | Install Visual C++ build tools or use compatible wheel/environment |
 | Notebook execution fails from batch | Run `python -m pip install --upgrade nbconvert nbclient ipykernel` |
 | GUI not opening | Verify Tkinter is included in Python installation |
+| Plot style error (`seaborn-v0_8-whitegrid`) | Update seaborn/matplotlib or use the built-in style fallback in current code |
 
 ## Notes
 
@@ -163,4 +169,4 @@ The `figures/` directory currently includes:
 
 ## License
 
-Add your preferred license information.
+This repository includes a license file. See `LICENSE` for details.

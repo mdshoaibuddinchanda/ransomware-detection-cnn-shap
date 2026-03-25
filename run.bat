@@ -1,37 +1,25 @@
 @echo off
 setlocal
 
-if not exist figures mkdir figures
+echo Running repository validation...
+python scripts\ci_validate.py
+if errorlevel 1 (
+    echo Validation failed. Stopping.
+    exit /b 1
+)
 
-echo Running Main.py...
+if /I "%~1"=="gui" goto gui
+if /I "%~1"=="notebook" goto notebook
+
+echo Validation passed. Optional modes: run.bat gui or run.bat notebook
+exit /b 0
+
+:gui
+echo Launching the legacy GUI explicitly...
 python Main.py
-if errorlevel 1 (
-	echo Main.py failed. Stopping.
-	pause
-	exit /b 1
-)
+exit /b %errorlevel%
 
-echo Running notebook to auto-generate figures, tables, and PDF...
+:notebook
+echo Executing the notebook with the already-installed runtime...
 python -m nbconvert --to notebook --execute Ransomware_Paper_Enhancements.ipynb --inplace --ExecutePreprocessor.timeout=-1
-if errorlevel 1 (
-	echo nbconvert not available or notebook execution failed.
-	echo Attempting to install required notebook packages...
-	python -m pip install --upgrade nbconvert nbclient ipykernel
-	if errorlevel 1 (
-		echo Auto-install failed. Please install manually:
-		echo   pip install nbconvert nbclient ipykernel
-		pause
-		exit /b 1
-	)
-
-	echo Retrying notebook execution...
-	python -m nbconvert --to notebook --execute Ransomware_Paper_Enhancements.ipynb --inplace --ExecutePreprocessor.timeout=-1
-	if errorlevel 1 (
-		echo Notebook execution still failed after install.
-		pause
-		exit /b 1
-	)
-)
-
-echo Done. Check the figures folder for all outputs.
-pause
+exit /b %errorlevel%

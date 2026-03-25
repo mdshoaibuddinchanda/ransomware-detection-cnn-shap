@@ -9,14 +9,15 @@ import seaborn as sns
 from sklearn.preprocessing import LabelEncoder
 import os
 import re
-from keras.callbacks import ModelCheckpoint 
+import json
+from tensorflow.keras.callbacks import ModelCheckpoint
 import pickle
-from keras.layers import LSTM #load LSTM class
-from keras.utils.np_utils import to_categorical
-from keras.layers import  MaxPooling2D
-from keras.layers import Dense, Dropout, Activation, Flatten #load DNN dense layers
-from keras.layers import Convolution2D #load CNN model
-from keras.models import Sequential, Model
+from tensorflow.keras.layers import LSTM #load LSTM class
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.layers import MaxPooling2D
+from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten #load DNN dense layers
+from tensorflow.keras.layers import Convolution2D #load CNN model
+from tensorflow.keras.models import Sequential, Model
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import train_test_split
@@ -35,11 +36,9 @@ from sklearn.ensemble import RandomForestClassifier
 from matplotlib.backends.backend_pdf import PdfPages
 
 
-main = tkinter.Tk()
-main.title("Detection of Ransomware Attacks Using Processor and Disk Usage Data ") #designing main screen
-main.geometry("1300x1200")
+main = None
 
-global filename, dataset, X_train, X_test, y_train, y_test, X, Y, scaler, pca
+global filename, dataset, X_train, X_val, X_test, y_train, y_val, y_test, X, Y, scaler, pca
 global accuracy, precision, recall, fscore, values,cnn_model
 precision = []
 recall = []
@@ -50,6 +49,9 @@ CLASS_NAME_MAP = {0: 'Non Attack', 1: 'Attack'}
 cnn_model = None
 scaler = None
 feature_columns_used = []
+RANDOM_STATE = 42
+VALIDATION_SIZE = 0.20
+MODEL_METADATA_PATH = os.path.join("model", "model_metadata.json")
 AUTO_OPEN_SAVED_IMAGES = False
 FIGURES_DIR = "figures"
 
@@ -58,7 +60,48 @@ if os.path.exists(FIGURES_DIR) == False:
 
 
 def _is_preprocessed():
-    return 'X_train' in globals() and 'X_test' in globals() and 'y_train' in globals() and 'y_test' in globals()
+    required = ('X_train', 'X_val', 'X_test', 'y_train', 'y_val', 'y_test', 'scaler')
+    return all(name in globals() and globals()[name] is not None for name in required)
+
+
+def _can_load_model_weights(model_name, input_shape):
+    """Only load weights when their recorded preprocessing contract matches."""
+    if not os.path.exists(MODEL_METADATA_PATH):
+        return False
+    try:
+        with open(MODEL_METADATA_PATH, "r", encoding="utf-8") as handle:
+            metadata = json.load(handle)
+        record = metadata.get(model_name, {})
+        return (
+            record.get("random_state") == RANDOM_STATE
+            and record.get("feature_columns") == feature_columns_used
+            and record.get("input_shape") == list(input_shape)
+            and os.path.exists(record.get("weights_path", ""))
+        )
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return False
+
+
+def _record_model_metadata(model_name, input_shape, weights_path):
+    """Record the split/preprocessing contract next to newly trained weights."""
+    metadata = {}
+    if os.path.exists(MODEL_METADATA_PATH):
+        try:
+            with open(MODEL_METADATA_PATH, "r", encoding="utf-8") as handle:
+                metadata = json.load(handle)
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            metadata = {}
+    metadata[model_name] = {
+        "random_state": RANDOM_STATE,
+        "feature_columns": list(feature_columns_used),
+        "input_shape": list(input_shape),
+        "weights_path": weights_path,
+        "validation_fraction": VALIDATION_SIZE,
+        "scaler": "MinMaxScaler(feature_range=(0, 1), fit_on_train_only)",
+    }
+    os.makedirs(os.path.dirname(MODEL_METADATA_PATH), exist_ok=True)
+    with open(MODEL_METADATA_PATH, "w", encoding="utf-8") as handle:
+        json.dump(metadata, handle, indent=2, sort_keys=True)
 
 
 def _to_one_hot(y):
@@ -256,7 +299,7 @@ def uploadDataset():
 
 def processDataset():
     global dataset, X, Y
-    global X_train, X_test, y_train, y_test, pca, scaler, feature_columns_used
+    global X_train, X_val, X_test, y_train, y_val, y_test, pca, scaler, feature_columns_used
     text.delete('1.0', END)
 
     if 'dataset' not in globals() or dataset is None:
@@ -267,6 +310,7 @@ def processDataset():
 
     null_before = int(dataset.isnull().sum().sum())
     text.insert(END, "Initial Missing Values: " + str(null_before) + "\n")
+    dataset = dataset.copy()
     dataset.fillna(0, inplace = True)
     null_after = int(dataset.isnull().sum().sum())
     text.insert(END, "Missing Values After Fill: " + str(null_after) + "\n")
@@ -286,20 +330,35 @@ def processDataset():
     feature_df = full_feature_df.iloc[:, 1:]
     feature_columns_used = list(feature_df.columns)
 
-    X = feature_df.values
-    Y = y_series.values
+    X = feature_df.to_numpy(dtype=float)
+    Y = y_series.to_numpy(dtype=int)
 
     text.insert(END, "\nFeature Matrix Shape: " + str(X.shape) + "\n")
     text.insert(END, "Label Vector Shape: " + str(Y.shape) + "\n")
 
-    indices = np.arange(X.shape[0])
-    np.random.shuffle(indices)#shuffle dataset values
-    X = X[indices]
-    Y = Y[indices]
+    # Split raw values before fitting any transform.  The test set is never
+    # allowed to influence the scaler or neural-network model selection.
+    X_dev_raw, X_test_raw, y_dev, y_test = train_test_split(
+        X,
+        Y,
+        test_size=0.2,
+        random_state=RANDOM_STATE,
+        stratify=Y,
+    )
+    X_train_raw, X_val_raw, y_train, y_val = train_test_split(
+        X_dev_raw,
+        y_dev,
+        test_size=VALIDATION_SIZE,
+        random_state=RANDOM_STATE,
+        stratify=y_dev,
+    )
 
-    scaler = MinMaxScaler(feature_range = (0, 1)) #use to normalize training data
-    scaler = MinMaxScaler((0,1))
-    X = scaler.fit_transform(X)#normalized or transform features
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    X_train = scaler.fit_transform(X_train_raw)
+    X_val = scaler.transform(X_val_raw)
+    X_test = scaler.transform(X_test_raw)
+    X = np.vstack((X_train, X_val, X_test))
+    Y = np.concatenate((y_train, y_val, y_test))
 
     text.insert(END, "\nNormalization: MinMaxScaler(0, 1) applied\n")
     text.insert(END, "Normalized Value Range: [" + str(round(float(X.min()), 4)) + ", " + str(round(float(X.max()), 4)) + "]\n")
@@ -311,20 +370,23 @@ def processDataset():
         suppress_small=True,
         max_line_width=160
     )
-    text.insert(END, "\nNormalized Feature Preview (first " + str(preview_count) + " rows):\n")
+    text.insert(END, "\nNormalized Feature Preview (first " + str(preview_count) + " training rows):\n")
     text.insert(END, preview_matrix + "\n")
 
-    X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size = 0.2)
-
     _log_section("Train/Test Split Summary")
-    text.insert(END, "Training Samples (80%): " + str(X_train.shape[0]) + "\n")
+    text.insert(END, "Training Samples (64%): " + str(X_train.shape[0]) + "\n")
+    text.insert(END, "Validation Samples (16%): " + str(X_val.shape[0]) + "\n")
     text.insert(END, "Testing Samples (20%):  " + str(X_test.shape[0]) + "\n")
     text.insert(END, "Features per Sample:    " + str(X_train.shape[1]) + "\n")
+    text.insert(END, "Random State:           " + str(RANDOM_STATE) + "\n")
 
     train_dist = _class_distribution_table(y_train)
+    validation_dist = _class_distribution_table(y_val)
     test_dist = _class_distribution_table(y_test)
     text.insert(END, "\nTraining Class Distribution:\n")
     text.insert(END, train_dist.to_string(index=False) + "\n")
+    text.insert(END, "\nValidation Class Distribution:\n")
+    text.insert(END, validation_dist.to_string(index=False) + "\n")
     text.insert(END, "\nTesting Class Distribution:\n")
     text.insert(END, test_dist.to_string(index=False) + "\n")
 
@@ -421,7 +483,12 @@ def runDT():
     global accuracy, precision, recall, fscore
     text.delete('1.0', END)
     
-    dt_cls = DecisionTreeClassifier(criterion = "entropy",max_leaf_nodes=2,max_features="auto")#giving hyper input parameter values
+    dt_cls = DecisionTreeClassifier(
+        criterion="entropy",
+        max_leaf_nodes=2,
+        max_features="sqrt",
+        random_state=RANDOM_STATE,
+    )
     dt_cls.fit(X_train, y_train)
     predict = dt_cls.predict(X_test)
     calculateMetrics("Decision Tree", predict, y_test)
@@ -431,7 +498,14 @@ def runRF():
     global accuracy, precision, recall, fscore
     text.delete('1.0', END)
     
-    rf = RandomForestClassifier(n_estimators=40, criterion='gini', max_features="log2", min_weight_fraction_leaf=0.3)
+    rf = RandomForestClassifier(
+        n_estimators=40,
+        criterion='gini',
+        max_features="log2",
+        min_weight_fraction_leaf=0.3,
+        random_state=RANDOM_STATE,
+        n_jobs=1,
+    )
     rf.fit(X_train, y_train)
     predict = rf.predict(X_test)
     calculateMetrics("Random Forest", predict, y_test)
@@ -440,14 +514,20 @@ def runXGBoost():
     global accuracy, precision, recall, fscore
     text.delete('1.0', END)
     
-    xgb_cls = XGBClassifier(n_estimators=10,learning_rate=0.09,max_depth=2)
+    xgb_cls = XGBClassifier(
+        n_estimators=10,
+        learning_rate=0.09,
+        max_depth=2,
+        random_state=RANDOM_STATE,
+        n_jobs=1,
+        eval_metric="logloss",
+    )
     xgb_cls.fit(X_train, y_train)
     predict = xgb_cls.predict(X_test)
-    predict[0:9500] = y_test[0:9500]
     calculateMetrics("XGBoost", predict, y_test)
 
 def runDNN():
-    global X_train, y_train, X_test, y_test
+    global X_train, X_val, y_train, y_val, X_test, y_test
     global accuracy, precision, recall, fscore
     text.delete('1.0', END)
     if _is_preprocessed() == False:
@@ -455,8 +535,10 @@ def runDNN():
         return
     try:
         y_train_dl = _to_one_hot(y_train)
+        y_val_dl = _to_one_hot(y_val)
         y_test_dl = _to_one_hot(y_test)
         x_train_dl = _as_2d_features(X_train)
+        x_val_dl = _as_2d_features(X_val)
         x_test_dl = _as_2d_features(X_test)
         #define DNN object
         dnn_model = Sequential()
@@ -469,12 +551,13 @@ def runDNN():
         dnn_model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
         #start training model on train data and perform validation on test data
         #train and load the model
-        if os.path.exists("model/dnn_weights.hdf5") == False:
+        if not _can_load_model_weights("dnn", x_train_dl.shape[1:]):
             model_check_point = ModelCheckpoint(filepath='model/dnn_weights.hdf5', verbose = 1, save_best_only = True)
-            hist = dnn_model.fit(x_train_dl, y_train_dl, batch_size = 32, epochs = 10, validation_data=(x_test_dl, y_test_dl), callbacks=[model_check_point], verbose=1)
+            hist = dnn_model.fit(x_train_dl, y_train_dl, batch_size = 32, epochs = 10, validation_data=(x_val_dl, y_val_dl), callbacks=[model_check_point], verbose=1)
             f = open('model/dnn_history.pckl', 'wb')
             pickle.dump(hist.history, f)
             f.close()
+            _record_model_metadata("dnn", x_train_dl.shape[1:], "model/dnn_weights.hdf5")
         else:
             dnn_model.load_weights("model/dnn_weights.hdf5")
         #perform prediction on test data
@@ -486,7 +569,7 @@ def runDNN():
         text.insert(END, "DNN execution failed:\n"+str(e)+"\n")
 
 def runLSTM():
-    global X_train, y_train, X_test, y_test
+    global X_train, X_val, y_train, y_val, X_test, y_test
     global accuracy, precision, recall, fscore
     text.delete('1.0', END)
     if _is_preprocessed() == False:
@@ -494,10 +577,13 @@ def runLSTM():
         return
     try:
         y_train_dl = _to_one_hot(y_train)
+        y_val_dl = _to_one_hot(y_val)
         y_test_dl = _to_one_hot(y_test)
         x_train_base = _as_2d_features(X_train)
+        x_val_base = _as_2d_features(X_val)
         x_test_base = _as_2d_features(X_test)
         x_train_lstm = np.reshape(x_train_base, (x_train_base.shape[0], x_train_base.shape[1], 1))
+        x_val_lstm = np.reshape(x_val_base, (x_val_base.shape[0], x_val_base.shape[1], 1))
         x_test_lstm = np.reshape(x_test_base, (x_test_base.shape[0], x_test_base.shape[1], 1))
 
         lstm_model = Sequential()#defining deep learning sequential object
@@ -513,12 +599,13 @@ def runLSTM():
         lstm_model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
         #start training model on train data and perform validation on test data
         #train and load the model
-        if os.path.exists("model/lstm_weights.hdf5") == False:
+        if not _can_load_model_weights("lstm", x_train_lstm.shape[1:]):
             model_check_point = ModelCheckpoint(filepath='model/lstm_weights.hdf5', verbose = 1, save_best_only = True)
-            hist = lstm_model.fit(x_train_lstm, y_train_dl, batch_size = 32, epochs = 10, validation_data=(x_test_lstm, y_test_dl), callbacks=[model_check_point], verbose=1)
+            hist = lstm_model.fit(x_train_lstm, y_train_dl, batch_size = 32, epochs = 10, validation_data=(x_val_lstm, y_val_dl), callbacks=[model_check_point], verbose=1)
             f = open('model/lstm_history.pckl', 'wb')
             pickle.dump(hist.history, f)
             f.close()
+            _record_model_metadata("lstm", x_train_lstm.shape[1:], "model/lstm_weights.hdf5")
         else:
             lstm_model.load_weights("model/lstm_weights.hdf5")
         #perform prediction on test data
@@ -529,7 +616,7 @@ def runLSTM():
     except Exception as e:
         text.insert(END, "LSTM execution failed:\n"+str(e)+"\n")
 def runCNN():
-    global X_train, y_train, X_test, y_test,cnn_model
+    global X_train, X_val, y_train, y_val, X_test, y_test,cnn_model
     global accuracy, precision, recall, fscore
     text.delete('1.0', END)
     if _is_preprocessed() == False:
@@ -537,10 +624,13 @@ def runCNN():
         return
     try:
         y_train_dl = _to_one_hot(y_train)
+        y_val_dl = _to_one_hot(y_val)
         y_test_dl = _to_one_hot(y_test)
         x_train_base = _as_2d_features(X_train)
+        x_val_base = _as_2d_features(X_val)
         x_test_base = _as_2d_features(X_test)
         x_train_cnn = np.reshape(x_train_base, (x_train_base.shape[0], x_train_base.shape[1], 1, 1))
+        x_val_cnn = np.reshape(x_val_base, (x_val_base.shape[0], x_val_base.shape[1], 1, 1))
         x_test_cnn = np.reshape(x_test_base, (x_test_base.shape[0], x_test_base.shape[1], 1, 1))
         #define extension CNN model object
         cnn_model = Sequential()
@@ -561,12 +651,13 @@ def runCNN():
         #compile the CNN with LSTM model
         cnn_model.compile(optimizer = 'adam', loss = 'categorical_crossentropy', metrics = ['accuracy'])
         #train and load the model
-        if os.path.exists("model/cnn_weights.hdf5") == False:
+        if not _can_load_model_weights("cnn", x_train_cnn.shape[1:]):
             model_check_point = ModelCheckpoint(filepath='model/cnn_weights.hdf5', verbose = 1, save_best_only = True)
-            hist = cnn_model.fit(x_train_cnn, y_train_dl, batch_size = 8, epochs = 10, validation_data=(x_test_cnn, y_test_dl), callbacks=[model_check_point], verbose=1)
+            hist = cnn_model.fit(x_train_cnn, y_train_dl, batch_size = 8, epochs = 10, validation_data=(x_val_cnn, y_val_dl), callbacks=[model_check_point], verbose=1)
             f = open('model/cnn_history.pckl', 'wb')
             pickle.dump(hist.history, f)
             f.close()
+            _record_model_metadata("cnn", x_train_cnn.shape[1:], "model/cnn_weights.hdf5")
         else:
             cnn_model.load_weights("model/cnn_weights.hdf5")
         #perform prediction on test data
@@ -837,140 +928,151 @@ def generatePDFReport():
     except Exception as e:
         text.insert(END, "PDF generation failed:\n" + str(e) + "\n")
 
-APP_BG = '#edf3fb'
-CARD_BG = '#ffffff'
-TITLE_COLOR = '#12335b'
-SUBTITLE_COLOR = '#415a77'
-PRIMARY_BTN = '#1768ac'
-PRIMARY_BTN_ACTIVE = '#0f4d80'
-SECONDARY_BTN = '#2a9d8f'
-SECONDARY_BTN_ACTIVE = '#1f776d'
 
-main.config(bg=APP_BG)
+def launch_gui():
+    """Launch the legacy Tk interface explicitly, never during import."""
+    global main, text
+    main = tkinter.Tk()
+    main.title("Detection of Ransomware Attacks Using Processor and Disk Usage Data " )
+    main.geometry("1300x1200")
+    APP_BG = '#edf3fb'
+    CARD_BG = '#ffffff'
+    TITLE_COLOR = '#12335b'
+    SUBTITLE_COLOR = '#415a77'
+    PRIMARY_BTN = '#1768ac'
+    PRIMARY_BTN_ACTIVE = '#0f4d80'
+    SECONDARY_BTN = '#2a9d8f'
+    SECONDARY_BTN_ACTIVE = '#1f776d'
 
-title_font = ('Segoe UI', 20, 'bold')
-subtitle_font = ('Segoe UI', 10, 'normal')
+    main.config(bg=APP_BG)
 
-title = Label(
-    main,
-    text='Detection of Ransomware Attacks Using Processor and Disk Usage Data',
-    bg=APP_BG,
-    fg=TITLE_COLOR,
-    font=title_font
-)
-title.place(x=20, y=14)
+    title_font = ('Segoe UI', 20, 'bold')
+    subtitle_font = ('Segoe UI', 10, 'normal')
 
-subtitle = Label(
-    main,
-    text='Train, evaluate, compare, and report ransomware detection models from one interface',
-    bg=APP_BG,
-    fg=SUBTITLE_COLOR,
-    font=subtitle_font
-)
-subtitle.place(x=22, y=52)
-
-controls_frame = Frame(main, bg=CARD_BG, highlightthickness=1, highlightbackground='#c9d6ea')
-controls_frame.place(x=20, y=85, width=1260, height=150)
-
-for col in range(6):
-    controls_frame.grid_columnconfigure(col, weight=1)
-
-btn_font = ('Segoe UI', 10, 'bold')
-
-def _style_button(button_obj, primary=True):
-    if primary:
-        button_obj.config(
-            bg=PRIMARY_BTN,
-            activebackground=PRIMARY_BTN_ACTIVE,
-            fg='white',
-            activeforeground='white'
-        )
-    else:
-        button_obj.config(
-            bg=SECONDARY_BTN,
-            activebackground=SECONDARY_BTN_ACTIVE,
-            fg='white',
-            activeforeground='white'
-        )
-    button_obj.config(
-        font=btn_font,
-        relief='flat',
-        bd=0,
-        padx=10,
-        pady=8,
-        cursor='hand2'
+    title = Label(
+        main,
+        text='Detection of Ransomware Attacks Using Processor and Disk Usage Data',
+        bg=APP_BG,
+        fg=TITLE_COLOR,
+        font=title_font
     )
+    title.place(x=20, y=14)
 
-uploadButton = Button(controls_frame, text='Upload Attack Database', command=uploadDataset)
-uploadButton.grid(row=0, column=0, padx=8, pady=8, sticky='ew')
-_style_button(uploadButton)
+    subtitle = Label(
+        main,
+        text='Train, evaluate, compare, and report ransomware detection models from one interface',
+        bg=APP_BG,
+        fg=SUBTITLE_COLOR,
+        font=subtitle_font
+    )
+    subtitle.place(x=22, y=52)
 
-processButton = Button(controls_frame, text='Preprocess & Split Dataset', command=processDataset)
-processButton.grid(row=0, column=1, padx=8, pady=8, sticky='ew')
-_style_button(processButton)
+    controls_frame = Frame(main, bg=CARD_BG, highlightthickness=1, highlightbackground='#c9d6ea')
+    controls_frame.place(x=20, y=85, width=1260, height=150)
 
-svmButton = Button(controls_frame, text='Run SVM Algorithm', command=runsvm)
-svmButton.grid(row=0, column=2, padx=8, pady=8, sticky='ew')
-_style_button(svmButton)
+    for col in range(6):
+        controls_frame.grid_columnconfigure(col, weight=1)
 
-knnButton = Button(controls_frame, text='Run KNN Algorithm', command=runknn)
-knnButton.grid(row=0, column=3, padx=8, pady=8, sticky='ew')
-_style_button(knnButton)
+    btn_font = ('Segoe UI', 10, 'bold')
 
-dtButton = Button(controls_frame, text='Run Decision Tree', command=runDT)
-dtButton.grid(row=0, column=4, padx=8, pady=8, sticky='ew')
-_style_button(dtButton)
+    def _style_button(button_obj, primary=True):
+        if primary:
+            button_obj.config(
+                bg=PRIMARY_BTN,
+                activebackground=PRIMARY_BTN_ACTIVE,
+                fg='white',
+                activeforeground='white'
+            )
+        else:
+            button_obj.config(
+                bg=SECONDARY_BTN,
+                activebackground=SECONDARY_BTN_ACTIVE,
+                fg='white',
+                activeforeground='white'
+            )
+        button_obj.config(
+            font=btn_font,
+            relief='flat',
+            bd=0,
+            padx=10,
+            pady=8,
+            cursor='hand2'
+        )
 
-rfButton = Button(controls_frame, text='Run Random Forest', command=runRF)
-rfButton.grid(row=0, column=5, padx=8, pady=8, sticky='ew')
-_style_button(rfButton)
+    uploadButton = Button(controls_frame, text='Upload Attack Database', command=uploadDataset)
+    uploadButton.grid(row=0, column=0, padx=8, pady=8, sticky='ew')
+    _style_button(uploadButton)
 
-xgButton = Button(controls_frame, text='Run XGBoost Algorithm', command=runXGBoost)
-xgButton.grid(row=1, column=0, padx=8, pady=8, sticky='ew')
-_style_button(xgButton)
+    processButton = Button(controls_frame, text='Preprocess & Split Dataset', command=processDataset)
+    processButton.grid(row=0, column=1, padx=8, pady=8, sticky='ew')
+    _style_button(processButton)
 
-dnnButton = Button(controls_frame, text='Run DNN Algorithm', command=runDNN)
-dnnButton.grid(row=1, column=1, padx=8, pady=8, sticky='ew')
-_style_button(dnnButton)
+    svmButton = Button(controls_frame, text='Run SVM Algorithm', command=runsvm)
+    svmButton.grid(row=0, column=2, padx=8, pady=8, sticky='ew')
+    _style_button(svmButton)
 
-lstmButton = Button(controls_frame, text='Run LSTM Algorithm', command=runLSTM)
-lstmButton.grid(row=1, column=2, padx=8, pady=8, sticky='ew')
-_style_button(lstmButton)
+    knnButton = Button(controls_frame, text='Run KNN Algorithm', command=runknn)
+    knnButton.grid(row=0, column=3, padx=8, pady=8, sticky='ew')
+    _style_button(knnButton)
 
-cnnButton = Button(controls_frame, text='Run CNN2D Algorithm', command=runCNN)
-cnnButton.grid(row=1, column=3, padx=8, pady=8, sticky='ew')
-_style_button(cnnButton)
+    dtButton = Button(controls_frame, text='Run Decision Tree', command=runDT)
+    dtButton.grid(row=0, column=4, padx=8, pady=8, sticky='ew')
+    _style_button(dtButton)
 
-graphButton = Button(controls_frame, text='Comparison Graph', command=comparisongraph)
-graphButton.grid(row=1, column=4, padx=8, pady=8, sticky='ew')
-_style_button(graphButton)
+    rfButton = Button(controls_frame, text='Run Random Forest', command=runRF)
+    rfButton.grid(row=0, column=5, padx=8, pady=8, sticky='ew')
+    _style_button(rfButton)
 
-predictButton = Button(controls_frame, text='Predict Attack from Test Data', command=prdeict)
-predictButton.grid(row=1, column=5, padx=8, pady=8, sticky='ew')
-_style_button(predictButton)
+    xgButton = Button(controls_frame, text='Run XGBoost Algorithm', command=runXGBoost)
+    xgButton.grid(row=1, column=0, padx=8, pady=8, sticky='ew')
+    _style_button(xgButton)
 
-pdfButton = Button(controls_frame, text='Generate PDF Report', command=generatePDFReport)
-pdfButton.grid(row=2, column=0, columnspan=6, padx=8, pady=(4, 8), sticky='ew')
-_style_button(pdfButton, primary=False)
+    dnnButton = Button(controls_frame, text='Run DNN Algorithm', command=runDNN)
+    dnnButton.grid(row=1, column=1, padx=8, pady=8, sticky='ew')
+    _style_button(dnnButton)
 
-output_frame = Frame(main, bg=CARD_BG, highlightthickness=1, highlightbackground='#c9d6ea')
-output_frame.place(x=20, y=250, width=1260, height=620)
+    lstmButton = Button(controls_frame, text='Run LSTM Algorithm', command=runLSTM)
+    lstmButton.grid(row=1, column=2, padx=8, pady=8, sticky='ew')
+    _style_button(lstmButton)
 
-text_font = ('Consolas', 10, 'normal')
-text = Text(
-    output_frame,
-    wrap='word',
-    bg='#f8fbff',
-    fg='#102a43',
-    insertbackground='#102a43',
-    bd=0,
-    highlightthickness=0,
-    font=text_font
-)
-scroll = Scrollbar(output_frame, orient=VERTICAL, command=text.yview)
-text.configure(yscrollcommand=scroll.set)
+    cnnButton = Button(controls_frame, text='Run CNN2D Algorithm', command=runCNN)
+    cnnButton.grid(row=1, column=3, padx=8, pady=8, sticky='ew')
+    _style_button(cnnButton)
 
-text.place(x=12, y=12, width=1208, height=594)
-scroll.place(x=1222, y=12, height=594)
+    graphButton = Button(controls_frame, text='Comparison Graph', command=comparisongraph)
+    graphButton.grid(row=1, column=4, padx=8, pady=8, sticky='ew')
+    _style_button(graphButton)
 
-main.mainloop()
+    predictButton = Button(controls_frame, text='Predict Attack from Test Data', command=prdeict)
+    predictButton.grid(row=1, column=5, padx=8, pady=8, sticky='ew')
+    _style_button(predictButton)
+
+    pdfButton = Button(controls_frame, text='Generate PDF Report', command=generatePDFReport)
+    pdfButton.grid(row=2, column=0, columnspan=6, padx=8, pady=(4, 8), sticky='ew')
+    _style_button(pdfButton, primary=False)
+
+    output_frame = Frame(main, bg=CARD_BG, highlightthickness=1, highlightbackground='#c9d6ea')
+    output_frame.place(x=20, y=250, width=1260, height=620)
+
+    text_font = ('Consolas', 10, 'normal')
+    text = Text(
+        output_frame,
+        wrap='word',
+        bg='#f8fbff',
+        fg='#102a43',
+        insertbackground='#102a43',
+        bd=0,
+        highlightthickness=0,
+        font=text_font
+    )
+    scroll = Scrollbar(output_frame, orient=VERTICAL, command=text.yview)
+    text.configure(yscrollcommand=scroll.set)
+
+    text.place(x=12, y=12, width=1208, height=594)
+    scroll.place(x=1222, y=12, height=594)
+
+    main.mainloop()
+
+
+if __name__ == '__main__':
+    launch_gui()

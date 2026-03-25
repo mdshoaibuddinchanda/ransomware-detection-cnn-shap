@@ -6,6 +6,7 @@ import ast
 import csv
 import json
 import math
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -64,9 +65,44 @@ def validate_project() -> dict[str, object]:
         notebook = json.load(handle)
     if notebook.get("nbformat") not in {4, 5} or not isinstance(notebook.get("cells"), list):
         raise AssertionError("notebook is not a valid nbformat 4/5 document")
+
+    required_source_contract = (
+        "RANDOM_STATE = 42",
+        "X_train_raw, X_val_raw, y_train, y_val = train_test_split",
+        "scaler.fit_transform(X_train_raw)",
+        "validation_data=(x_val_dl, y_val_dl)",
+        "validation_data=(x_val_lstm, y_val_dl)",
+        "validation_data=(x_val_cnn, y_val_dl)",
+        "_record_model_metadata",
+    )
+    missing_contract = [token for token in required_source_contract if token not in source]
+    if missing_contract:
+        raise AssertionError(f"Main.py is missing audit contract: {missing_contract}")
+    prohibited_source_patterns = (
+        r"predict\s*\[\s*0\s*:\s*9500\s*\]\s*=",
+        r"scaler\.fit_transform\(X\s*\)",
+        r"validation_data\s*=\s*\(\s*x_test",
+    )
+    for pattern in prohibited_source_patterns:
+        if re.search(pattern, source, flags=re.IGNORECASE):
+            raise AssertionError(f"Main.py contains prohibited audit pattern: {pattern}")
+
+    notebook_source = "\n".join(
+        "".join(cell.get("source", []))
+        for cell in notebook["cells"]
+        if cell.get("cell_type") == "code"
+    )
+    for token in ("Fallback model accuracy", "Using RandomForest fallback", "max(acc -"):
+        if token in notebook_source:
+            raise AssertionError(f"notebook contains unsupported evidence pattern: {token}")
+    if "run_adversarial_robustness" in notebook_source:
+        raise AssertionError("notebook still labels controlled noise as adversarial robustness")
+    if any(cell.get("outputs") for cell in notebook["cells"] if cell.get("cell_type") == "code"):
+        raise AssertionError("notebook contains stale outputs; execute it to create fresh evidence")
     return {
         "source": "Main.py",
         "notebook_cells": len(notebook["cells"]),
+        "audit_contract": "passed",
         "datasets": [
             validate_csv(ROOT / "Dataset" / "hpc_io_data.csv", require_label=True),
             validate_csv(ROOT / "Dataset" / "testData.csv", require_label=False),

@@ -3,7 +3,7 @@
 [![Python](https://img.shields.io/badge/python-research%20prototype-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-# 🔐 Ransomware Detection using CNN2D with Explainable AI and Robustness Evaluation
+# Ransomware Detection using CNN2D with Explainable AI and Robustness Evaluation
 
 This is a behavior-based ransomware-detection research project developed as a
 major project. It studies whether processor/HPC, memory, and disk-I/O telemetry
@@ -125,29 +125,47 @@ The major remaining scientific gates are:
 - model-faithful explanation stability and mechanism tests; and
 - clean-checkout reproduction of every reported table and figure.
 
-## Historical baseline and updated implementation
+## Historical baseline and audited implementation
 
 The preserved historical snapshot contains the original `Main.py`, `run.bat`,
 notebook, dataset files, saved models, and figures. Those artifacts document the
 major-project baseline but should not be used as proof of current scientific claims.
 
-The updated implementation is being reconstructed as a headless, testable research
-pipeline with explicit schemas, temporal windows, fold-local preprocessing,
-calibration, holdout evaluation, latency measurement, alert replay, manifests, and
-CI checks. The migration remains intentionally separate from the preserved GitHub
-history until it is explicitly accepted.
+The current implementation remains a compact legacy GUI plus a post-training
+notebook; it is not yet the temporal, grouped, calibrated research pipeline
+described in the research plan. The audit fixes below improve integrity without
+turning the existing 13-feature tabular data into evidence for temporal or causal
+claims.
 
 ## Continuous integration
 
 Every push and pull request runs a clean-checkout workflow. It checks Python syntax,
 project-file integrity, notebook JSON structure, CSV columns and numeric values,
 label validity, and the declared dependency manifest across Python 3.10 through
-3.13.
+3.13. This is a structural/data-contract gate, not a claim that neural networks
+were trained in CI.
 
-The preserved GUI creates a Tk window at import time and uses legacy TensorFlow and
-Keras pins, so CI does not pretend to train those models headlessly. The workflow
-reports exactly what it verifies; model-level tests will be added with the modern
-package migration.
+The GUI now launches only when `Main.py` is executed directly, uses the
+`tensorflow.keras` namespace, and has deterministic train/validation/test splits.
+Use `run.bat` for the default validation gate; `run.bat gui` launches the optional
+interface and `run.bat notebook` executes the notebook only when its dependencies
+are already installed. The scripts never install packages automatically.
+
+## Audit remediation
+
+The current audit removed the XGBoost ground-truth overwrite, prevents test-set
+scaling leakage, adds a fixed validation split and seed, records preprocessing
+metadata for newly trained neural weights, removes the notebook's silent
+RandomForest CV substitution, clears stale notebook outputs, and refuses fabricated
+model-comparison tables. These changes make the reported workflow more honest;
+they do not regenerate or certify the old figures.
+
+The unresolved research gates are still real: the supplied data has no trustworthy
+host/family/session/time grouping, the CNN2D input is a 1x1 pseudo-image and the
+LSTM input is not a temporal sequence, no independent external holdout is bundled,
+the GUI has no endpoint collector or notification delivery adapter, and CI remains
+static/data-contract validation. Do not present the historical accuracy values as
+final results until those gates are addressed and executed evidence is archived.
 
 ## Safety and reproducibility
 

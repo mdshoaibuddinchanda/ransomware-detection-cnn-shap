@@ -19,6 +19,7 @@ class ProjectIntegrityTests(unittest.TestCase):
         self.assertEqual(report["source"], "Main.py")
         self.assertGreater(report["notebook_cells"], 0)
         self.assertEqual(len(report["datasets"]), 2)
+        self.assertEqual(report["audit_contract"], "passed")
 
 
 if __name__ == "__main__":

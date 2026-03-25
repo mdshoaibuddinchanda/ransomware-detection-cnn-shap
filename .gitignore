@@ -45,3 +45,19 @@ Thumbs.db
 
 # Optional generated artifacts (uncomment if you do not want to track outputs)
 # figures/
+
+# Owner-only controls and local research notes
+.agent-private/
+AGENTS.md
+AGENTS.override.md
+PROJECT_NOTES.local.md
+PROJECT_STATUS.md
+REQUIREMENTS.md
+ARCHITECTURE.md
+RESEARCH_PROFILE.md
+configs/
+
+# Downloaded/generated research material
+data/raw/
+runs/
+model/model_metadata.json

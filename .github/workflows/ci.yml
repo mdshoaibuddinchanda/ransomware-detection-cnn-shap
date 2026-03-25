@@ -1,0 +1,54 @@
+name: Project validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate project (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Compile Python sources
+        run: python -m compileall -q Main.py scripts tests
+      - name: Run integrity tests
+        run: python -m unittest discover -s tests -p test_*.py -v
+      - name: Validate data, notebook, and project contract
+        run: python scripts/ci_validate.py
+      - name: Verify required project inputs
+        run: |
+          test -f Dataset/hpc_io_data.csv
+          test -f Dataset/testData.csv
+          test -f Ransomware_Paper_Enhancements.ipynb
+          test -f Requirements.txt
+
+  dependency-manifest:
+    name: Check dependency manifest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Parse dependency manifest
+        run: python -c "from pathlib import Path; lines=[line.strip() for line in Path('Requirements.txt').read_text().splitlines() if line.strip() and not line.startswith('#')]; assert lines, 'Requirements.txt is empty'; print('declared_dependencies=', len(lines))"

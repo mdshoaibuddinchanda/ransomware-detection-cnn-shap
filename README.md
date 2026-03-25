@@ -1,4 +1,5 @@
 [![Research status](https://img.shields.io/badge/research-needs--revision-orange)](#current-status)
+[![CI](https://github.com/mdshoaibuddinchanda/ransomware-detection-cnn2D/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/mdshoaibuddinchanda/ransomware-detection-cnn2D/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/python-research%20prototype-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
@@ -135,6 +136,18 @@ pipeline with explicit schemas, temporal windows, fold-local preprocessing,
 calibration, holdout evaluation, latency measurement, alert replay, manifests, and
 CI checks. The migration remains intentionally separate from the preserved GitHub
 history until it is explicitly accepted.
+
+## Continuous integration
+
+Every push and pull request runs a clean-checkout workflow. It checks Python syntax,
+project-file integrity, notebook JSON structure, CSV columns and numeric values,
+label validity, and the declared dependency manifest across Python 3.10 through
+3.13.
+
+The preserved GUI creates a Tk window at import time and uses legacy TensorFlow and
+Keras pins, so CI does not pretend to train those models headlessly. The workflow
+reports exactly what it verifies; model-level tests will be added with the modern
+package migration.
 
 ## Safety and reproducibility
 

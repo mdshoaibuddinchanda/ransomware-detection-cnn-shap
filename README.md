@@ -1,172 +1,223 @@
-# Detection of Ransomware Attacks Using Processor and Disk Usage Data
+# 🔐 Ransomware Detection using CNN2D with Explainable AI and Robustness Evaluation
 
-Final project repository for ransomware attack detection using processor and disk I/O behavior.
+## 📌 Overview
 
-This project now includes:
+Ransomware continues to evolve, rendering traditional signature-based detection ineffective.
+This project presents a **behavior-driven ransomware detection system** leveraging system-level activity (CPU and disk I/O), combined with deep learning and explainable AI techniques.
 
-- A complete Tkinter desktop app for model training/testing
-- A notebook with paper-focused enhancements (XAI, robustness, CV, realtime simulation)
-- Centralized output generation into `figures/`
-- Combined PDF reporting (`all_outputs_report.pdf`)
+Unlike static analysis approaches, this system focuses on **runtime behavioral patterns**, enabling detection of previously unseen and obfuscated ransomware variants.
 
-## Project Status
+---
 
-| Area | Status | Notes |
-|---|---|---|
-| Core GUI pipeline | Completed | Dataset upload, preprocessing, model runs, comparison, prediction |
-| ML/DL model training + evaluation | Completed | SVM, KNN, DT, RF, XGBoost, DNN, LSTM, CNN2D |
-| Output artifact management | Completed | PNG/CSV/PDF outputs saved to `figures/` |
-| Notebook research enhancements | Completed | SHAP, adversarial robustness, 10-fold stratified CV, realtime simulation |
-| Batch automation (`run.bat`) | Completed | Runs `Main.py` then executes notebook |
+## 🎯 Objectives
 
-## Implemented Features Checklist
+* Detect ransomware using system behavior rather than signatures
+* Compare classical ML and deep learning approaches
+* Improve interpretability using SHAP (Explainable AI)
+* Evaluate robustness under adversarial perturbations
+* Validate generalization using stratified cross-validation
 
-- [x] GUI-based end-to-end workflow
-- [x] Preprocessing and train/test split
-- [x] Multiple model benchmarking (ML + DL)
-- [x] Confusion matrices and metric reporting
-- [x] Test-data prediction using CNN2D model
-- [x] Model comparison chart and metrics table export
-- [x] SHAP explainability outputs
-- [x] Adversarial noise robustness evaluation
-- [x] 10-fold stratified cross-validation outputs
-- [x] Real-time stream simulation outputs
-- [x] Centralized `figures/` output directory
-- [x] Unified PDF report generation
+---
 
-## Repository Structure
+## ⚙️ Methodology
 
-| Path | Description |
-|---|---|
-| `Main.py` | Tkinter application with training, evaluation, predictions, and PDF generation button |
-| `Ransomware_Paper_Enhancements.ipynb` | Notebook for paper-strength analyses and one-click export |
-| `Requirements.txt` | Python package requirements (legacy stack) |
-| `run.bat` | Windows automation script: GUI run + notebook execution |
-| `Dataset/hpc_io_data.csv` | Main dataset for training/evaluation |
-| `Dataset/testData.csv` | External test data used by GUI prediction step |
-| `model/*.hdf5` | Saved model weights |
-| `model/*.pckl` | Saved training histories |
-| `figures/` | Generated figures/tables/PDF artifacts |
+### 🔹 Data Pipeline
 
-## Models Included
+1. System activity data acquisition (CPU + Disk I/O)
+2. Data preprocessing and normalization
+3. Feature representation for model input
+4. Train-test split with stratification
 
-| Category | Models |
-|---|---|
-| Machine Learning | SVM, KNN, Decision Tree, Random Forest, XGBoost |
-| Deep Learning | DNN, LSTM, CNN2D |
+### 🔹 Modeling Strategy
 
-## Environment Setup
+* Benchmark multiple ML and DL models
+* Identify best-performing architecture
+* Use CNN2D as the final model due to superior pattern extraction capability
 
-Recommended: Python 3.7 in conda (dependencies are legacy and pinned).
+### 🔹 Evaluation Framework
 
-```bash
+* Standard metrics (accuracy, confusion matrix)
+* 10-Fold Stratified Cross Validation
+* Robustness testing under adversarial noise
+* Explainability using SHAP
+
+---
+
+## 🧠 Models Evaluated
+
+### Machine Learning
+
+* Support Vector Machine (SVM)
+* K-Nearest Neighbors (KNN)
+* Decision Tree
+* Random Forest
+* XGBoost
+
+### Deep Learning
+
+* Deep Neural Network (DNN)
+* Long Short-Term Memory (LSTM)
+* **Convolutional Neural Network (CNN2D)** *(Final Model)*
+
+---
+
+## 🏗️ System Design
+
+* **Input:** System-level activity (CPU usage, Disk I/O)
+* **Processing:** Feature extraction and transformation
+* **Model:** CNN2D classifier
+* **Output:** Binary classification (Ransomware / Benign)
+
+---
+
+## 📊 Dataset
+
+* HPC system activity dataset 
+* Captures runtime behavior patterns rather than static signatures
+* Includes training dataset and external validation dataset
+
+---
+
+## 📈 Results
+
+| Metric                | Value                       |
+| --------------------- | --------------------------- |
+| Accuracy (10-Fold CV) | **99.08% ± 0.39%**          |
+| Evaluation Strategy   | Stratified Cross Validation |
+| Models Compared       | 8                           |
+
+### Key Insight
+
+CNN2D outperformed both classical ML and sequential models, indicating that **spatial feature representation of behavioral data is highly effective for ransomware detection**.
+
+---
+
+## 🔍 Explainability (SHAP)
+
+* Identifies most influential features contributing to predictions
+* Enhances trust and interpretability of the model
+* Provides insight into ransomware behavior patterns
+
+---
+
+## 🛡️ Robustness Evaluation
+
+* Introduces adversarial perturbations to test model stability
+* Ensures reliability in noisy, real-world environments
+
+---
+
+## 🔁 Cross-Validation Strategy
+
+* 10-Fold Stratified Cross Validation
+* Ensures model generalization across data splits
+* Reduces overfitting risk
+
+---
+
+## ⚡ Real-Time Simulation
+
+* Simulates streaming system activity
+* Evaluates model performance in dynamic conditions
+
+---
+
+## 🖥️ GUI Application
+
+A Tkinter-based interface provides:
+
+* Dataset upload and preprocessing
+* Model training and evaluation
+* Comparative performance visualization
+* Prediction on external test data
+* Automated report generation
+
+---
+
+## 📊 Outputs Generated
+
+* Confusion matrices for all models
+* Model comparison graphs
+* SHAP plots and feature importance
+* Adversarial robustness analysis
+* Real-time simulation outputs
+* Combined PDF report
+
+All outputs are stored in:
+
+```id="figdir123"
+figures/
+```
+
+---
+
+## 📂 Repository Structure
+
+```id="struct123"
+.
+├── Main.py
+├── Ransomware_Paper_Enhancements.ipynb
+├── Dataset/
+├── model/
+├── figures/
+├── run.bat
+├── Requirements.txt
+```
+
+---
+
+## ⚙️ Installation
+
+```id="install123"
 conda create -n ransomware-detect python=3.7 -y
 conda activate ransomware-detect
 uv pip install -r Requirements.txt
 ```
 
-Fallback (if `uv` is not available):
+---
 
-```bash
-conda create -n ransomware-detect python=3.7 -y
-conda activate ransomware-detect
-pip install -r Requirements.txt
-```
+## ▶️ Execution
 
-## Run Options
+### Full Pipeline
 
-### Option A: Full Automated Run (Recommended)
-
-```bat
+```id="run123"
 run.bat
 ```
 
-What `run.bat` does:
+### GUI Mode
 
-1. Ensures `figures/` exists
-2. Runs `Main.py`
-3. Executes `Ransomware_Paper_Enhancements.ipynb` in-place via `nbconvert`
-4. Attempts notebook package install if `nbconvert` execution fails
-
-### Option B: GUI Only
-
-```bash
+```id="gui123"
 python Main.py
 ```
 
-### Option C: Notebook Only
+### Notebook Execution
 
-```bash
+```id="nb123"
 python -m nbconvert --to notebook --execute Ransomware_Paper_Enhancements.ipynb --inplace --ExecutePreprocessor.timeout=-1
 ```
 
-## GUI Workflow (Button Order)
+---
 
-1. `Upload Attack Database`
-2. `Preprocess & Split Dataset`
-3. Run models (any/all):
-   - `Run SVM Algorithm`
-   - `Run KNN Algorithm`
-   - `Run Decision Tree`
-   - `Run Random Forest`
-   - `Run XGBoost Algorithm`
-   - `Run DNN Algorithm`
-   - `Run LSTM Algorithm`
-   - `Run CNN2D Algorithm`
-4. `Comparison Graph`
-5. `Predict Attack from Test Data`
-6. `Generate PDF Report`
+## 📌 Key Contributions
 
-Prediction behavior:
+* Behavior-based ransomware detection system
+* Comprehensive ML vs DL benchmarking
+* CNN2D-based classification framework
+* Integration of SHAP for explainability
+* Adversarial robustness evaluation
+* Real-time simulation pipeline
+* Automated reporting system
 
-- The app asks you to select the test CSV at runtime (not hardcoded).
-- If the selected test CSV contains a `label` column, the app also computes validation metrics and a validation confusion matrix.
+---
 
-## Notebook Enhancements (Implemented)
+## 👨‍💻 Team Members
 
-| Enhancement | Output |
-|---|---|
-| SHAP Explainability | `shap_summary_plot.png`, `shap_feature_importance.png`, `shap_feature_importance_table.csv` |
-| Adversarial Robustness | `adversarial_robustness.png`, `adversarial_robustness_table.csv` |
-| 10-Fold Stratified CV | `kfold_cv_accuracy.png`, `kfold_cv_scores.csv`, `kfold_cv_summary.csv` |
-| Real-Time Simulation | `realtime_simulation.png`, `realtime_summary.csv` |
-| Model Comparison | `model_comparison.png`, `model_comparison_table.csv` |
-| Combined Report | `all_outputs_report.pdf` |
+* **md shoaib uddin chanda** — 160922748092
+* **Mohammed Asim** — 160922748108
+* **Maimona Jaweed** — 160922748083
 
-Note: Cross-dataset validation is optional in the notebook and is skipped by default unless an explicit external dataset path is provided.
+---
 
-## Current Generated Artifacts
+## 📜 License
 
-The `figures/` directory currently includes:
-
-| File Type | Files |
-|---|---|
-| PNG | `dataset_class_distribution.png`, `svm_confusion_matrix.png`, `knn_confusion_matrix.png`, `decision_tree_confusion_matrix.png`, `random_forest_confusion_matrix.png`, `xgboost_confusion_matrix.png`, `dnn_confusion_matrix.png`, `lstm_confusion_matrix.png`, `extension_cnn2d_confusion_matrix.png`, `all_algorithms_performance_graph.png`, `test_prediction_distribution.png`, `baseline_confusion_matrix.png`, `shap_summary_plot.png`, `shap_feature_importance.png`, `adversarial_robustness.png`, `kfold_cv_accuracy.png`, `realtime_simulation.png`, `model_comparison.png`, `test_predictions_validation_confusion_matrix.png` |
-| CSV | `algorithm_metrics_long.csv`, `test_predictions.csv`, `test_predictions_summary.csv`, `test_predictions_validation_metrics.csv`, `shap_feature_importance_table.csv`, `adversarial_robustness_table.csv`, `kfold_cv_scores.csv`, `kfold_cv_summary.csv`, `realtime_summary.csv`, `model_comparison_table.csv` |
-| PDF | `all_outputs_report.pdf` |
-
-## Key Outcome Snapshot
-
-| Metric | Value |
-|---|---|
-| 10-Fold Stratified CV Accuracy | `99.08% ± 0.39%` |
-
-## Troubleshooting
-
-| Issue | Suggested Fix |
-|---|---|
-| Dependency install fails | Use Python 3.7 conda environment and reinstall requirements |
-| `xgboost` install issues on Windows | Install Visual C++ build tools or use compatible wheel/environment |
-| Notebook execution fails from batch | Run `python -m pip install --upgrade nbconvert nbclient ipykernel` |
-| GUI not opening | Verify Tkinter is included in Python installation |
-| Plot style error (`seaborn-v0_8-whitegrid`) | Update seaborn/matplotlib or use the built-in style fallback in current code |
-
-## Notes
-
-- Existing `model/*.hdf5` files are loaded if present, reducing retraining time.
-- Delete model weight files to force fresh training.
-- This project uses older TensorFlow/Keras versions by design (legacy compatibility).
-
-## License
-
-This repository includes a license file. See `LICENSE` for details.
+Refer to the LICENSE file for details.
